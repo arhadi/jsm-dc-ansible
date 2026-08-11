@@ -1,0 +1,114 @@
+---
+###############################################################################
+# Jira Service Management Data Center - Prerequisites
+###############################################################################
+
+###############################################################################
+# Required Packages
+###############################################################################
+
+- name: Install required packages
+  ansible.builtin.dnf:
+    name:
+      - java-21-openjdk
+      - rsync
+      - unzip
+      - tar
+      - wget
+      - fontconfig
+    state: present
+
+###############################################################################
+# Java
+###############################################################################
+
+- name: Discover installed Java executable
+  ansible.builtin.command:
+    cmd: readlink -f /usr/bin/java
+  register: java_binary
+  changed_when: false
+
+- name: Set JAVA_HOME fact
+  ansible.builtin.set_fact:
+    java_home: "{{ java_binary.stdout | dirname | dirname }}"
+
+- name: Verify JAVA_HOME
+  ansible.builtin.command:
+    cmd: "{{ java_home }}/bin/java -version"
+  changed_when: false
+
+- name: Display detected JAVA_HOME
+  ansible.builtin.debug:
+    msg: "Detected JAVA_HOME={{ java_home }}"
+
+###############################################################################
+# JSM Service Account
+###############################################################################
+
+- name: Ensure JSM group exists
+  ansible.builtin.group:
+    name: "{{ jsm_group }}"
+    state: present
+
+- name: Ensure JSM user exists
+  ansible.builtin.user:
+    name: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    home: "{{ jsm_user_home }}"
+    shell: /bin/bash
+    system: true
+    create_home: true
+
+###############################################################################
+# Directories
+###############################################################################
+
+- name: Ensure JSM base directory exists
+  ansible.builtin.file:
+    path: "{{ jsm_base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure JSM installation directory exists
+  ansible.builtin.file:
+    path: "{{ jsm_install_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "{{ jsm_directory_mode }}"
+
+- name: Ensure JSM home directory exists
+  ansible.builtin.file:
+    path: "{{ jsm_home_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "{{ jsm_directory_mode }}"
+
+- name: Ensure JSM shared directory exists
+  ansible.builtin.file:
+    path: "{{ jsm_shared_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "{{ jsm_shared_dir_mode }}"
+  when: jsm_deployment_mode == "cluster"
+
+###############################################################################
+# Prerequisite Summary
+###############################################################################
+
+- name: Display JSM prerequisite summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM prerequisites completed"
+      - "JAVA_HOME   : {{ java_home }}"
+      - "User        : {{ jsm_user }}"
+      - "Group       : {{ jsm_group }}"
+      - "Install Dir : {{ jsm_install_dir }}"
+      - "Home Dir    : {{ jsm_home_dir }}"
+      - "Shared Dir  : {{ jsm_shared_dir }}"
+      - "========================================"

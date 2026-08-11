@@ -1,0 +1,10 @@
+###############################################################################
+# Jira Service Management Data Center Cluster
+###############################################################################
+
+ehcache.listener.hostName={{ ansible_default_ipv4.address }}
+ehcache.listener.port={{ jsm_ehcache_listener_port }}
+ehcache.object.port={{ jsm_ehcache_object_port }}
+
+jira.node.id={{ jsm_node_id }}
+jira.shared.home={{ jsm_shared_dir }}

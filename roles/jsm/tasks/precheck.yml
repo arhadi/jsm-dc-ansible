@@ -1,0 +1,240 @@
+---
+###############################################################################
+# Jira Service Management Data Center - Prechecks
+###############################################################################
+
+###############################################################################
+# Operating System
+###############################################################################
+
+- name: Verify RHEL 9
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "9"
+    fail_msg: "Only RHEL 9 is supported."
+    success_msg: "Operating system is supported: RHEL {{ ansible_distribution_major_version }}."
+
+###############################################################################
+# JSM Variables
+###############################################################################
+
+- name: Show playbook directory
+  ansible.builtin.debug:
+    var: playbook_dir
+
+- name: Show JSM installation variables
+  ansible.builtin.debug:
+    msg:
+      - "JSM version : {{ jsm_version }}"
+      - "JSM archive : {{ jsm_archive }}"
+      - "Install dir : {{ jsm_install_dir }}"
+      - "Home dir    : {{ jsm_home_dir }}"
+
+###############################################################################
+# JSM Installer
+###############################################################################
+
+- name: Check JSM installer archive
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ jsm_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  register: jsm_archive_stat
+
+- name: Verify JSM installer exists
+  ansible.builtin.assert:
+    that:
+      - jsm_archive_stat.stat.exists
+    fail_msg: |
+      Jira Service Management installer not found.
+
+      Expected:
+      {{ role_path }}/files/{{ jsm_archive }}
+    success_msg: "Jira Service Management installer archive found."
+
+###############################################################################
+# Installer Checksum
+###############################################################################
+
+- name: Verify JSM installer SHA256 checksum
+  ansible.builtin.assert:
+    that:
+      - jsm_archive_stat.stat.checksum == jsm_archive_sha256
+    fail_msg: |
+      Jira Service Management installer checksum verification failed.
+
+      Expected:
+      {{ jsm_archive_sha256 }}
+
+      Actual:
+      {{ jsm_archive_stat.stat.checksum }}
+    success_msg: "Jira Service Management installer checksum verified successfully."
+  when:
+    - jsm_archive_sha256 | default('') | length > 0
+
+- name: Warn when JSM installer checksum is not configured
+  ansible.builtin.debug:
+    msg: "WARNING: jsm_archive_sha256 is empty. Installer checksum verification was skipped."
+  when:
+    - jsm_archive_sha256 | default('') | length == 0
+
+###############################################################################
+# Service Account
+###############################################################################
+
+- name: Check JSM user
+  ansible.builtin.command:
+    cmd: "id {{ jsm_user }}"
+  register: jsm_user_result
+  changed_when: false
+  failed_when: false
+
+- name: Report JSM user
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'JSM user exists'
+        if jsm_user_result.rc == 0
+        else 'JSM user does not exist (will be created)'
+      }}
+
+- name: Check JSM group
+  ansible.builtin.command:
+    cmd: "getent group {{ jsm_group }}"
+  register: jsm_group_result
+  changed_when: false
+  failed_when: false
+
+- name: Report JSM group
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'JSM group exists'
+        if jsm_group_result.rc == 0
+        else 'JSM group does not exist (will be created)'
+      }}
+
+###############################################################################
+# Directories
+###############################################################################
+
+- name: Check JSM installation directory
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}"
+  register: jsm_install_dir_stat
+
+- name: Report JSM installation directory
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'JSM installation directory exists'
+        if jsm_install_dir_stat.stat.exists
+        else 'JSM installation directory does not exist (will be created)'
+      }}
+
+- name: Check JSM home directory
+  ansible.builtin.stat:
+    path: "{{ jsm_home_dir }}"
+  register: jsm_home_stat
+
+- name: Report JSM home directory
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'JSM home directory exists'
+        if jsm_home_stat.stat.exists
+        else 'JSM home directory does not exist (will be created)'
+      }}
+
+###############################################################################
+# Java
+###############################################################################
+
+- name: Check Java
+  ansible.builtin.command:
+    cmd: java -version
+  register: java_version
+  changed_when: false
+  failed_when: false
+
+- name: Report Java
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'Java is installed'
+        if java_version.rc == 0
+        else 'Java is not installed (will be installed)'
+      }}
+
+###############################################################################
+# PostgreSQL
+###############################################################################
+
+- name: Check PostgreSQL connectivity
+  ansible.builtin.wait_for:
+    host: "{{ jsm_db_host }}"
+    port: "{{ jsm_db_port }}"
+    timeout: 5
+  register: postgres_check
+  failed_when: false
+  changed_when: false
+
+- name: Report PostgreSQL connectivity
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'PostgreSQL is reachable at ' ~ jsm_db_host ~ ':' ~ (jsm_db_port | string)
+        if postgres_check.failed is not defined or not postgres_check.failed
+        else 'PostgreSQL is NOT reachable at ' ~ jsm_db_host ~ ':' ~ (jsm_db_port | string)
+      }}
+
+- name: Fail when PostgreSQL is unreachable
+  ansible.builtin.assert:
+    that:
+      - postgres_check.failed is not defined or not postgres_check.failed
+    fail_msg: "PostgreSQL {{ jsm_db_host }}:{{ jsm_db_port }} is not reachable."
+
+###############################################################################
+# Disk Space
+###############################################################################
+
+- name: Check free disk space on JSM base directory
+  ansible.builtin.command:
+    cmd: "df -BG {{ jsm_base_dir }}"
+  register: app_disk
+  changed_when: false
+
+- name: Show disk information
+  ansible.builtin.debug:
+    var: app_disk.stdout_lines
+
+- name: Extract free disk space
+  ansible.builtin.set_fact:
+    app_free_gb: "{{ app_disk.stdout_lines[1].split()[3] | regex_replace('G', '') }}"
+
+- name: Verify minimum free disk space
+  ansible.builtin.assert:
+    that:
+      - (app_free_gb | int) >= 10
+    fail_msg: "{{ jsm_base_dir }} requires at least 10 GB of free space."
+    success_msg: "{{ jsm_base_dir }} has {{ app_free_gb }} GB free."
+
+###############################################################################
+# Precheck Summary
+###############################################################################
+
+- name: JSM precheck summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM precheck completed"
+      - "Version       : {{ jsm_version }}"
+      - "Install Dir   : {{ jsm_install_dir }}"
+      - "Home Dir      : {{ jsm_home_dir }}"
+      - "Database      : {{ jsm_db_name }}"
+      - "DB Host       : {{ jsm_db_host }}"
+      - "DB Port       : {{ jsm_db_port }}"
+      - "HTTP Port     : {{ jsm_http_port }}"
+      - "Deploy Mode   : {{ jsm_deployment_mode }}"
+      - "========================================"

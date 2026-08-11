@@ -1,0 +1,37 @@
+[Unit]
+Description={{ jsm_display_name }}
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+
+User={{ jsm_user }}
+Group={{ jsm_group }}
+
+WorkingDirectory={{ jsm_install_dir }}
+
+Environment=JAVA_HOME={{ java_home }}
+Environment=JRE_HOME={{ java_home }}
+Environment=JIRA_HOME={{ jsm_home_dir }}
+
+PIDFile={{ jsm_pid_file }}
+
+ExecStart={{ jsm_start_script }}
+ExecStop={{ jsm_stop_script }}
+
+TimeoutStartSec={{ jsm_start_timeout }}
+TimeoutStopSec={{ jsm_stop_timeout }}
+
+LimitNOFILE={{ jsm_nofile_limit }}
+LimitNPROC={{ jsm_nproc_limit }}
+
+UMask=0027
+
+Restart=on-failure
+RestartSec=10
+
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

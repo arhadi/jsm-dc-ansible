@@ -1,0 +1,118 @@
+---
+###############################################################################
+# Jira Service Management Data Center - systemd
+###############################################################################
+
+###############################################################################
+# Validate Installation
+###############################################################################
+
+- name: Verify JSM start script
+  ansible.builtin.stat:
+    path: "{{ jsm_start_script }}"
+  register: jsm_start
+
+- name: Verify JSM stop script
+  ansible.builtin.stat:
+    path: "{{ jsm_stop_script }}"
+  register: jsm_stop
+
+- name: Validate JSM installation
+  ansible.builtin.assert:
+    that:
+      - jsm_start.stat.exists
+      - jsm_stop.stat.exists
+    fail_msg: |
+      Jira Service Management installation is incomplete.
+
+      Start Script : {{ jsm_start_script }}
+      Exists       : {{ jsm_start.stat.exists | default(false) }}
+
+      Stop Script  : {{ jsm_stop_script }}
+      Exists       : {{ jsm_stop.stat.exists | default(false) }}
+
+###############################################################################
+# Install systemd Unit
+###############################################################################
+
+- name: Deploy JSM systemd service
+  ansible.builtin.template:
+    src: jira.service.j2
+    dest: "/etc/systemd/system/{{ jsm_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart JSM
+
+###############################################################################
+# Apply systemd Configuration
+###############################################################################
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+###############################################################################
+# Enable Service
+###############################################################################
+
+- name: Enable JSM service
+  ansible.builtin.systemd:
+    name: "{{ jsm_service_name }}"
+    enabled: "{{ jsm_service_enabled | bool }}"
+
+###############################################################################
+# Start Service
+###############################################################################
+
+- name: Start JSM service
+  ansible.builtin.systemd:
+    name: "{{ jsm_service_name }}"
+    state: started
+  when: jsm_service_started | bool
+
+###############################################################################
+# Wait for PID
+###############################################################################
+
+- name: Wait for JSM PID file
+  ansible.builtin.wait_for:
+    path: "{{ jsm_pid_file }}"
+    timeout: "{{ jsm_start_timeout }}"
+  when: jsm_service_started | bool
+
+###############################################################################
+# Verify Service
+###############################################################################
+
+- name: Check JSM service status
+  ansible.builtin.command:
+    cmd: "systemctl is-active {{ jsm_service_name }}"
+  register: jsm_service_status
+  changed_when: false
+  failed_when: jsm_service_status.stdout != "active"
+  when: jsm_service_started | bool
+
+- name: Check JSM service enabled
+  ansible.builtin.command:
+    cmd: "systemctl is-enabled {{ jsm_service_name }}"
+  register: jsm_service_enabled_status
+  changed_when: false
+  failed_when: false
+
+###############################################################################
+# Summary
+###############################################################################
+
+- name: Display JSM systemd summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM systemd configuration completed"
+      - "Service  : {{ jsm_service_name }}"
+      - "Enabled  : {{ jsm_service_enabled_status.stdout | default('unknown') }}"
+      - "Active   : {{ jsm_service_status.stdout | default('Not Started') if jsm_service_started else 'Not Started' }}"
+      - "PID File : {{ jsm_pid_file }}"
+      - "========================================"

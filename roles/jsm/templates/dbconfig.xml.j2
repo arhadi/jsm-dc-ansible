@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<jira-database-config>
+    <name>defaultDS</name>
+    <delegator-name>default</delegator-name>
+
+    <database-type>{{ jsm_database_type }}</database-type>
+
+    <jdbc-datasource>
+        <url>{{ jsm_jdbc_url }}</url>
+        <driver-class>{{ jsm_db_driver }}</driver-class>
+
+        <username>{{ jsm_db_username }}</username>
+        <password>{{ jsm_db_password }}</password>
+
+        <pool-min-size>20</pool-min-size>
+        <pool-max-size>20</pool-max-size>
+
+        <validation-query>select 1</validation-query>
+    </jdbc-datasource>
+</jira-database-config>

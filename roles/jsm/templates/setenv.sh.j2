@@ -1,0 +1,24 @@
+#!/bin/bash
+
+###############################################################################
+# Jira Service Management JVM Configuration
+###############################################################################
+
+export JAVA_HOME="{{ java_home }}"
+export JRE_HOME="{{ java_home }}"
+
+JVM_MINIMUM_MEMORY="{{ jsm_jvm_min_heap }}"
+JVM_MAXIMUM_MEMORY="{{ jsm_jvm_max_heap }}"
+
+JVM_SUPPORT_RECOMMENDED_ARGS="
+{{ jsm_jvm_args }}
+-Djdk.tls.ephemeralDHKeySize=2048
+-XX:+Use{{ jsm_gc }}
+-XX:+ExplicitGCInvokesConcurrent
+-XX:MaxGCPauseMillis=200
+-XX:ReservedCodeCacheSize={{ jsm_jvm_code_cache }}
+"
+
+export JVM_MINIMUM_MEMORY
+export JVM_MAXIMUM_MEMORY
+export JVM_SUPPORT_RECOMMENDED_ARGS

@@ -1,0 +1,14 @@
+---
+###############################################################################
+# Jira Service Management Data Center - Handlers
+###############################################################################
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart JSM
+  ansible.builtin.systemd:
+    name: "{{ jsm_service_name }}"
+    state: restarted
+  when: jsm_service_enabled | bool

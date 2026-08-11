@@ -1,0 +1,156 @@
+---
+###############################################################################
+# Jira Service Management Data Center - Configuration
+###############################################################################
+
+###############################################################################
+# Directories
+###############################################################################
+
+- name: Create JSM Home directory
+  ansible.builtin.file:
+    path: "{{ jsm_home_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "{{ jsm_directory_mode }}"
+
+- name: Create JSM Shared Home directory
+  ansible.builtin.file:
+    path: "{{ jsm_shared_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "{{ jsm_shared_dir_mode }}"
+  when: jsm_deployment_mode == "cluster"
+
+###############################################################################
+# JVM Configuration
+###############################################################################
+
+- name: Configure JSM JVM minimum heap
+  ansible.builtin.replace:
+    path: "{{ jsm_install_dir }}/bin/setenv.sh"
+    regexp: '^JVM_MINIMUM_MEMORY=".*"$'
+    replace: 'JVM_MINIMUM_MEMORY="{{ jsm_jvm_min_heap }}"'
+
+- name: Configure JSM JVM maximum heap
+  ansible.builtin.replace:
+    path: "{{ jsm_install_dir }}/bin/setenv.sh"
+    regexp: '^JVM_MAXIMUM_MEMORY=".*"$'
+    replace: 'JVM_MAXIMUM_MEMORY="{{ jsm_jvm_max_heap }}"'
+
+- name: Configure JSM JVM code cache
+  ansible.builtin.replace:
+    path: "{{ jsm_install_dir }}/bin/setenv.sh"
+    regexp: '^JVM_CODE_CACHE_ARGS=.*$'
+    replace: 'JVM_CODE_CACHE_ARGS="-XX:InitialCodeCacheSize=32m -XX:ReservedCodeCacheSize={{ jsm_jvm_code_cache }}"'
+
+###############################################################################
+# Jira Platform Configuration
+###############################################################################
+
+- name: Deploy jira-application.properties
+  ansible.builtin.template:
+    src: jira-application.properties.j2
+    dest: "{{ jsm_install_dir }}/atlassian-jira/WEB-INF/classes/jira-application.properties"
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0644"
+
+###############################################################################
+# Database Configuration
+###############################################################################
+
+- name: Deploy dbconfig.xml
+  ansible.builtin.template:
+    src: dbconfig.xml.j2
+    dest: "{{ jsm_home_dir }}/dbconfig.xml"
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0640"
+
+###############################################################################
+# Data Center Cluster Configuration
+###############################################################################
+
+- name: Deploy cluster.properties
+  ansible.builtin.template:
+    src: cluster.properties.j2
+    dest: "{{ jsm_home_dir }}/cluster.properties"
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0644"
+  when: jsm_deployment_mode == "cluster"
+
+###############################################################################
+# Tomcat HTTP Port
+###############################################################################
+
+- name: Configure JSM HTTP connector
+  ansible.builtin.replace:
+    path: "{{ jsm_install_dir }}/conf/server.xml"
+    regexp: '<Connector port="8080"'
+    replace: '<Connector port="{{ jsm_http_port }}"'
+
+###############################################################################
+# Configuration Validation
+###############################################################################
+
+- name: Verify jira-application.properties
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/atlassian-jira/WEB-INF/classes/jira-application.properties"
+  register: jsm_properties
+
+- name: Verify dbconfig.xml
+  ansible.builtin.stat:
+    path: "{{ jsm_home_dir }}/dbconfig.xml"
+  register: jsm_dbconfig
+
+- name: Verify server.xml
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/conf/server.xml"
+  register: jsm_serverxml
+
+- name: Verify cluster.properties
+  ansible.builtin.stat:
+    path: "{{ jsm_home_dir }}/cluster.properties"
+  register: jsm_cluster
+  when: jsm_deployment_mode == "cluster"
+
+- name: Validate JSM configuration
+  ansible.builtin.assert:
+    that:
+      - jsm_properties.stat.exists
+      - jsm_dbconfig.stat.exists
+      - jsm_serverxml.stat.exists
+      - jsm_home_dir is defined
+      - jsm_install_dir is defined
+      - jsm_deployment_mode != "cluster" or jsm_shared_dir is defined
+      - jsm_deployment_mode != "cluster" or jsm_cluster.stat.exists
+    fail_msg: |
+      Jira Service Management configuration validation failed.
+
+      jira-application.properties : {{ jsm_properties.stat.exists | default(false) }}
+      dbconfig.xml                : {{ jsm_dbconfig.stat.exists | default(false) }}
+      server.xml                  : {{ jsm_serverxml.stat.exists | default(false) }}
+      cluster.properties          : {{ jsm_cluster.stat.exists | default(false) if jsm_deployment_mode == 'cluster' else 'N/A' }}
+    success_msg: "Jira Service Management configuration files validated successfully."
+
+###############################################################################
+# Configuration Summary
+###############################################################################
+
+- name: Display JSM configuration summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM configuration completed"
+      - "Install Directory : {{ jsm_install_dir }}"
+      - "Home Directory    : {{ jsm_home_dir }}"
+      - "Shared Directory  : {{ jsm_shared_dir if jsm_deployment_mode == 'cluster' else 'N/A' }}"
+      - "HTTP Port         : {{ jsm_http_port }}"
+      - "Database          : {{ jsm_db_name }}"
+      - "Database User     : {{ jsm_db_username }}"
+      - "Deployment Mode   : {{ jsm_deployment_mode }}"
+      - "========================================"
