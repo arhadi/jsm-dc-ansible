@@ -1,17 +1,22 @@
 ---
-- name: Uninstall Atlassian Jira Data Center
+###############################################################################
+# Jira Service Management Data Center - Uninstall
+###############################################################################
+
+- name: Uninstall Atlassian Jira Service Management Data Center
   hosts: all
   become: true
   gather_facts: true
 
   vars:
-    jira_remove_install_dir: true
-    jira_remove_home: true
-    jira_remove_shared_home: true
-    jira_remove_user: true
-    jira_remove_group: true
+    jsm_remove_install_dir: true
+    jsm_remove_home: true
+    jsm_remove_shared_home: true
+    jsm_remove_user: true
+    jsm_remove_group: true
 
   tasks:
-    - import_role:
-        name: jira
+    - name: Run JSM uninstall
+      ansible.builtin.import_role:
+        name: jsm
         tasks_from: uninstall
