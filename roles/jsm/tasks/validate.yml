@@ -1,11 +1,11 @@
 ---
-###############################################################################
+# ------------------------------------------------------------
 # Jira Service Management Data Center - Validation
-###############################################################################
+# ------------------------------------------------------------
 
-###############################################################################
+# ------------------------------------------------------------
 # Installation
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM installation directory
   ansible.builtin.stat:
@@ -22,18 +22,18 @@
     path: "{{ jsm_stop_script }}"
   register: jsm_stop
 
-###############################################################################
+# ------------------------------------------------------------
 # PostgreSQL JDBC Driver
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify PostgreSQL JDBC driver
   ansible.builtin.stat:
     path: "{{ jsm_install_dir }}/lib/{{ jsm_db_jdbc_jar }}"
   register: jsm_jdbc_driver
 
-###############################################################################
+# ------------------------------------------------------------
 # JSM Home
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM home directory
   ansible.builtin.stat:
@@ -51,27 +51,28 @@
   register: jsm_cluster
   when: jsm_deployment_mode == "cluster"
 
-###############################################################################
+# ------------------------------------------------------------
 # Shared Home
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM shared home
   ansible.builtin.stat:
     path: "{{ jsm_shared_dir }}"
-  register: jsm_shared_home
+  register: jsm_shared_home_stat
   when: jsm_deployment_mode == "cluster"
 
 - name: Validate JSM shared home
   ansible.builtin.assert:
     that:
-      - jsm_shared_home.stat.exists
-      - jsm_shared_home.stat.isdir
-    fail_msg: "JSM shared home {{ jsm_shared_dir }} does not exist."
+      - jsm_shared_home_stat.stat.exists
+      - jsm_shared_home_stat.stat.isdir
+    fail_msg: "JSM shared home validation failed: {{ jsm_shared_dir }}"
+    success_msg: "JSM shared home validated: {{ jsm_shared_dir }}"
   when: jsm_deployment_mode == "cluster"
 
-###############################################################################
+# ------------------------------------------------------------
 # Database Connectivity
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify PostgreSQL TCP connectivity
   ansible.builtin.wait_for:
@@ -79,9 +80,9 @@
     port: "{{ jsm_db_port }}"
     timeout: 5
 
-###############################################################################
+# ------------------------------------------------------------
 # systemd Service
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM systemd service file
   ansible.builtin.stat:
@@ -102,9 +103,9 @@
     fail_msg: "JSM service {{ jsm_service_name }} is not running."
   when: jsm_service_started | bool
 
-###############################################################################
+# ------------------------------------------------------------
 # Java Process
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Check JSM Java process
   ansible.builtin.shell: >
@@ -120,18 +121,18 @@
     fail_msg: "JSM Java process is not running."
   when: jsm_service_started | bool
 
-###############################################################################
+# ------------------------------------------------------------
 # PID
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM PID file
   ansible.builtin.stat:
     path: "{{ jsm_pid_file }}"
   register: jsm_pid
 
-###############################################################################
+# ------------------------------------------------------------
 # HTTP Validation
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Wait for JSM HTTP port
   ansible.builtin.wait_for:
@@ -164,9 +165,9 @@
     fail_msg: "JSM HTTP endpoint is unavailable."
   when: jsm_service_started | bool
 
-###############################################################################
+# ------------------------------------------------------------
 # Java
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify Java version
   ansible.builtin.command:
@@ -174,9 +175,9 @@
   register: jsm_java_version
   changed_when: false
 
-###############################################################################
+# ------------------------------------------------------------
 # Ownership
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Get JSM installation ownership
   ansible.builtin.stat:
@@ -190,9 +191,9 @@
       - jsm_install_owner.stat.gr_name == jsm_group
     fail_msg: "Incorrect ownership on {{ jsm_install_dir }}."
 
-###############################################################################
+# ------------------------------------------------------------
 # Logs
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM logs directory
   ansible.builtin.stat:
@@ -206,9 +207,9 @@
       - jsm_logs.stat.isdir
     fail_msg: "JSM logs directory {{ jsm_log_dir }} is missing."
 
-###############################################################################
+# ------------------------------------------------------------
 # Cluster
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify JSM cluster node ID
   ansible.builtin.command:
@@ -216,9 +217,9 @@
   changed_when: false
   when: jsm_deployment_mode == "cluster"
 
-###############################################################################
+# ------------------------------------------------------------
 # Final Validation
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Ensure JSM installation is complete
   ansible.builtin.assert:
@@ -235,15 +236,15 @@
       - jsm_logs.stat.exists
       - not jsm_service_started or jsm_pid.stat.exists
       - not jsm_service_started or jsm_java_process.rc == 0
+      - jsm_deployment_mode != "cluster" or jsm_shared_home_stat.stat.exists
       - not jsm_service_started or jsm_service_status.stdout == "active"
       - jsm_deployment_mode != "cluster" or jsm_cluster.stat.exists
-      - jsm_deployment_mode != "cluster" or jsm_shared_home.stat.exists
     fail_msg: "Jira Service Management installation validation failed."
     success_msg: "Jira Service Management installation validation completed successfully."
 
-###############################################################################
-# Validation Summary
-###############################################################################
+# ------------------------------------------------------------
+# Summary
+# ------------------------------------------------------------
 
 - name: JSM validation summary
   ansible.builtin.debug:
@@ -253,46 +254,11 @@
       - "Version           : {{ jsm_version }}"
       - "Install Directory : {{ jsm_install_dir }}"
       - "Home Directory    : {{ jsm_home_dir }}"
-      - "Shared Directory  : {{ jsm_shared_dir if jsm_deployment_mode == 'cluster' else 'N/A' }}"
+      - "Shared Directory  : {{ jsm_shared_dir }}"
       - "HTTP Port         : {{ jsm_http_port }}"
       - "Database          : {{ jsm_db_name }}"
-      - "Database User     : {{ jsm_db_username }}"
-      - "Database Host     : {{ jsm_db_host }}:{{ jsm_db_port }}"
       - "Service           : {{ jsm_service_name }}"
       - "Deployment Mode   : {{ jsm_deployment_mode }}"
       - "========================================"
-
-###############################################################################
-# Next Steps
-###############################################################################
-
-- name: Display JSM next steps
-  ansible.builtin.debug:
-    msg:
-      - ""
-      - "======================================================="
-      - "Jira Service Management Data Center installation complete"
-      - "======================================================="
-      - ""
-      - "Installation Details"
-      - "--------------------"
-      - "Version            : {{ jsm_version }}"
-      - "Install Directory  : {{ jsm_install_dir }}"
-      - "Home Directory     : {{ jsm_home_dir }}"
-      - "Service            : {{ jsm_service_name }}"
-      - "HTTP Port          : {{ jsm_http_port }}"
-      - "Database           : {{ jsm_db_name }}"
-      - "Java Home          : {{ java_home }}"
-      - "Cluster Mode       : {{ jsm_deployment_mode }}"
-      - ""
-      - "Access URL"
-      - "----------"
-      - "http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ jsm_http_port }}{{ jsm_context_path }}"
-      - ""
-      - "Useful Commands"
-      - "---------------"
-      - "systemctl status {{ jsm_service_name }}"
-      - "systemctl restart {{ jsm_service_name }}"
-      - "journalctl -u {{ jsm_service_name }} -f"
-      - ""
-      - "======================================================="
+      - "Next: Complete setup at http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ jsm_http_port }}"
+      - "Complete the JSM Setup Wizard and apply the Data Center license."
