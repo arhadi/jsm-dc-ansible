@@ -1,0 +1,172 @@
+---
+# ------------------------------------------------------------
+# Jira Service Management Data Center - Installation
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Verify Installer on Ansible Controller
+# ------------------------------------------------------------
+
+- name: Verify JSM installer exists
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ jsm_archive }}"
+  delegate_to: localhost
+  register: jsm_installer
+
+- name: Fail if JSM installer is missing
+  ansible.builtin.fail:
+    msg: "Installer not found: {{ role_path }}/files/{{ jsm_archive }}"
+  when: not jsm_installer.stat.exists
+
+# ------------------------------------------------------------
+# Verify Existing Installation
+# ------------------------------------------------------------
+
+- name: Check if JSM is already installed
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/bin/start-jira.sh"
+  register: jsm_installation
+
+# ------------------------------------------------------------
+# Prepare Temporary Staging Area
+# ------------------------------------------------------------
+
+- name: Ensure temporary staging directory exists
+  ansible.builtin.file:
+    path: "{{ jsm_temp_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy JSM installer to target
+  ansible.builtin.copy:
+    src: "{{ jsm_archive }}"
+    dest: "{{ jsm_temp_dir }}/{{ jsm_archive }}"
+    mode: "0644"
+  when: not jsm_installation.stat.exists
+
+# ------------------------------------------------------------
+# Remove Incomplete Installation
+# ------------------------------------------------------------
+
+- name: Check JSM installation directory
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}"
+  register: jsm_install_dir_stat
+
+- name: Remove incomplete JSM installation
+  ansible.builtin.file:
+    path: "{{ jsm_install_dir }}"
+    state: absent
+  when:
+    - jsm_install_dir_stat.stat.exists
+    - not jsm_installation.stat.exists
+
+# ------------------------------------------------------------
+# Remove Previous Extracted Source
+# ------------------------------------------------------------
+
+- name: Remove previously extracted JSM installer directory
+  ansible.builtin.file:
+    path: "{{ jsm_install_dir | dirname }}/{{ jsm_extract_dir }}"
+    state: absent
+  when: not jsm_installation.stat.exists
+
+# ------------------------------------------------------------
+# Extract Jira Service Management
+# ------------------------------------------------------------
+
+- name: Extract JSM archive
+  ansible.builtin.unarchive:
+    src: "{{ jsm_temp_dir }}/{{ jsm_archive }}"
+    dest: "{{ jsm_install_dir | dirname }}"
+    remote_src: true
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+  when: not jsm_installation.stat.exists
+
+# ------------------------------------------------------------
+# Rename Installation Directory
+# ------------------------------------------------------------
+
+- name: Rename extracted JSM directory
+  ansible.builtin.command:
+    cmd: >
+      mv
+      {{ jsm_install_dir | dirname }}/{{ jsm_extract_dir }}
+      {{ jsm_install_dir }}
+  args:
+    creates: "{{ jsm_install_dir }}"
+  when:
+    - not jsm_installation.stat.exists
+    - jsm_extract_dir != (jsm_install_dir | basename)
+
+# ------------------------------------------------------------
+# Ensure Installation Ownership
+# ------------------------------------------------------------
+
+- name: Ensure JSM installation ownership
+  ansible.builtin.file:
+    path: "{{ jsm_install_dir }}"
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    recurse: true
+
+# ------------------------------------------------------------
+# Validate Installation
+# ------------------------------------------------------------
+
+- name: Verify JSM startup script
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/bin/start-jira.sh"
+  register: jsm_start_verify
+
+- name: Verify JSM shutdown script
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/bin/stop-jira.sh"
+  register: jsm_stop_verify
+
+- name: Verify JSM installation directory
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}"
+  register: jsm_dir_verify
+
+- name: Validate JSM installation
+  ansible.builtin.assert:
+    that:
+      - jsm_dir_verify.stat.exists
+      - jsm_dir_verify.stat.isdir
+      - jsm_start_verify.stat.exists
+      - jsm_stop_verify.stat.exists
+    fail_msg: |
+      Jira Service Management installation validation failed.
+
+      Install directory : {{ jsm_install_dir }}
+      Directory exists  : {{ jsm_dir_verify.stat.exists | default(false) }}
+      start-jira.sh     : {{ jsm_start_verify.stat.exists | default(false) }}
+      stop-jira.sh      : {{ jsm_stop_verify.stat.exists | default(false) }}
+    success_msg: "Jira Service Management installation files validated successfully."
+
+# ------------------------------------------------------------
+# Cleanup Temporary Files
+# ------------------------------------------------------------
+
+- name: Remove temporary JSM installer archive
+  ansible.builtin.file:
+    path: "{{ jsm_temp_dir }}/{{ jsm_archive }}"
+    state: absent
+
+# ------------------------------------------------------------
+# Installation Summary
+# ------------------------------------------------------------
+
+- name: Display JSM installation summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM installation completed"
+      - "Version        : {{ jsm_version }}"
+      - "Install Dir    : {{ jsm_install_dir }}"
+      - "Home Dir       : {{ jsm_home_dir }}"
+      - "Temp Directory : {{ jsm_temp_dir }}"
+      - "Archive        : {{ jsm_archive }}"
+      - "========================================"

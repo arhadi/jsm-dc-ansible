@@ -1,0 +1,185 @@
+---
+# ------------------------------------------------------------
+# Jira Service Management Linux Binary Installer
+# ------------------------------------------------------------
+
+- name: Set JSM installer path
+  ansible.builtin.set_fact:
+    jsm_installer_path: "{{ role_path }}/files/{{ jsm_installer }}"
+
+- name: Display JSM binary installer information
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM Binary Installation"
+      - "Installer   : {{ jsm_installer }}"
+      - "Install Dir : {{ jsm_install_dir }}"
+      - "Home Dir    : {{ jsm_home_dir }}"
+      - "HTTP Port   : {{ jsm_http_port }}"
+      - "Control Port: {{ jsm_control_port }}"
+      - "========================================"
+
+# ------------------------------------------------------------
+# Installer
+# ------------------------------------------------------------
+
+- name: Check JSM binary installer
+  ansible.builtin.stat:
+    path: "{{ jsm_installer_path }}"
+  register: jsm_installer_stat
+
+- name: Verify JSM binary installer exists
+  ansible.builtin.assert:
+    that:
+      - jsm_installer_stat.stat.exists
+      - jsm_installer_stat.stat.isreg
+    fail_msg: "JSM installer not found: {{ jsm_installer_path }}"
+
+- name: Ensure JSM binary installer is executable
+  ansible.builtin.file:
+    path: "{{ jsm_installer_path }}"
+    mode: "0755"
+
+# ------------------------------------------------------------
+# Response File
+# ------------------------------------------------------------
+
+- name: Create JSM installer response file
+  ansible.builtin.template:
+    src: response.varfile.j2
+    dest: "{{ jsm_temp_dir }}/jsm-response.varfile"
+    owner: root
+    group: root
+    mode: "0600"
+
+# ------------------------------------------------------------
+# Check Existing Installation
+# ------------------------------------------------------------
+
+- name: Check existing JSM installation
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/bin/start-jira.sh"
+  register: jsm_existing_installation
+
+# ------------------------------------------------------------
+# Run Installer
+# ------------------------------------------------------------
+
+- name: Install JSM using Atlassian binary installer
+  ansible.builtin.command:
+    cmd: >
+      {{ jsm_installer_path }}
+      -q
+      -varfile {{ jsm_temp_dir }}/jsm-response.varfile
+  when: not jsm_existing_installation.stat.exists
+  register: jsm_binary_install
+  changed_when: true
+
+# ------------------------------------------------------------
+# Verify Installation
+# ------------------------------------------------------------
+
+- name: Verify JSM installation directory
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}"
+  register: jsm_install_dir_stat
+
+- name: Verify JSM binary installation completed
+  ansible.builtin.assert:
+    that:
+      - jsm_install_dir_stat.stat.exists
+      - jsm_install_dir_stat.stat.isdir
+    fail_msg: >
+      JSM binary installer completed but installation directory
+      {{ jsm_install_dir }} was not found.
+
+# ------------------------------------------------------------
+# Runtime User
+#
+# Atlassian installer defaults to:
+#
+#   JIRA_USER="jira"
+#
+# Our automation standard is:
+#
+#   JIRA_USER="{{ jsm_user }}"
+#
+# ------------------------------------------------------------
+
+- name: Check JSM runtime user configuration
+  ansible.builtin.stat:
+    path: "{{ jsm_install_dir }}/bin/user.sh"
+  register: jsm_user_file
+
+- name: Configure JSM runtime user
+  ansible.builtin.lineinfile:
+    path: "{{ jsm_install_dir }}/bin/user.sh"
+    regexp: '^JIRA_USER='
+    line: 'JIRA_USER="{{ jsm_user }}" # managed by Ansible'
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0755"
+  when: jsm_user_file.stat.exists
+
+# ------------------------------------------------------------
+# Ownership
+# ------------------------------------------------------------
+
+- name: Ensure JSM installation ownership
+  ansible.builtin.file:
+    path: "{{ jsm_install_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    recurse: true
+
+- name: Ensure JSM home ownership
+  ansible.builtin.file:
+    path: "{{ jsm_home_dir }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0750"
+    recurse: true
+
+# ------------------------------------------------------------
+# Required Runtime Directories
+# ------------------------------------------------------------
+
+- name: Ensure JSM runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ jsm_user }}"
+    group: "{{ jsm_group }}"
+    mode: "0755"
+  loop:
+    - "{{ jsm_install_dir }}/logs"
+    - "{{ jsm_install_dir }}/temp"
+    - "{{ jsm_install_dir }}/work"
+
+# ------------------------------------------------------------
+# Cleanup
+# ------------------------------------------------------------
+
+- name: Remove temporary JSM installer response file
+  ansible.builtin.file:
+    path: "{{ jsm_temp_dir }}/jsm-response.varfile"
+    state: absent
+
+# ------------------------------------------------------------
+# Summary
+# ------------------------------------------------------------
+
+- name: Display JSM binary installation summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "JSM binary installation completed"
+      - "Version     : {{ jsm_version }}"
+      - "Install Dir : {{ jsm_install_dir }}"
+      - "Home Dir    : {{ jsm_home_dir }}"
+      - "Runtime User: {{ jsm_user }}"
+      - "HTTP Port   : {{ jsm_http_port }}"
+      - "Control Port: {{ jsm_control_port }}"
+      - "========================================"

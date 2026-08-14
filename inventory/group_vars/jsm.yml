@@ -11,13 +11,38 @@ jsm_product: "jira-service-management"
 jsm_display_name: "Atlassian Jira Service Management Data Center"
 
 # ------------------------------------------------------------
-# Installation
+# Version
 # ------------------------------------------------------------
 
 jsm_version: "11.3.10"
 
+# ------------------------------------------------------------
+# Installation Method
+#
+# Supported:
+#   archive   = Atlassian tar.gz archive
+#   installer = Atlassian Linux .bin installer
+# ------------------------------------------------------------
+
+jsm_install_method: "installer"
+
+# ------------------------------------------------------------
+# Archive Installer
+# ------------------------------------------------------------
+
 jsm_archive: "atlassian-servicedesk-{{ jsm_version }}.tar.gz"
+
 jsm_archive_sha256: "98db3b60f37ee94abbc5cb28e2d5cb27bca2871547d7ead909e7468e53ae9509"
+
+# ------------------------------------------------------------
+# Linux Binary Installer
+# ------------------------------------------------------------
+
+jsm_installer: "atlassian-servicedesk-{{ jsm_version }}-x64.bin"
+
+jsm_installer_sha256: "4811cc5bdb7b059c058950749cc3ef19202ff27a1c2dda88ace0db7ae1cd0384"
+
+jsm_control_port: 8005
 
 # ------------------------------------------------------------
 # Directories
@@ -144,7 +169,7 @@ jsm_service_enabled: true
 jsm_service_started: true
 
 jsm_start_delay: 10
-jsm_start_timeout: 300
+jsm_start_timeout: 600
 jsm_stop_timeout: 300
 
 # ------------------------------------------------------------

@@ -1,0 +1,14 @@
+# install4j response file for Jira Service Desk {{ jsm_version }}
+
+app.install.service$Boolean=false
+app.jiraHome={{ jsm_home_dir }}
+existingInstallationDir=/opt/Jira Service Desk
+httpPort$Long={{ jsm_http_port }}
+launch.application$Boolean=false
+portChoice=custom
+rmiPort$Long={{ jsm_control_port }}
+sys.adminRights$Boolean=true
+sys.adminRightsUiRootUnix$Boolean=false
+sys.confirmedUpdateInstallationString=false
+sys.installationDir={{ jsm_install_dir }}
+sys.languageId=en
